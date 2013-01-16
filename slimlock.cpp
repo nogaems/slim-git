@@ -50,7 +50,7 @@ void *RaiseWindow(void *data);
 // I really didn't wanna put these globals here, but it's the only way...
 Display* dpy;
 int scr;
-Window win;
+Window win, root;
 Cfg* cfg;
 Panel* loginPanel;
 string themeName = "";
@@ -139,8 +139,10 @@ int main(int argc, char **argv) {
 	}
 
 	const char *display = getenv("DISPLAY");
-	if (!display)
+	if (!display) {
 		display = DISPLAY;
+	}
+	XInitThreads();
 
 	if(!(dpy = XOpenDisplay(display)))
 		die(APPNAME": cannot open display\n");
@@ -151,7 +153,7 @@ int main(int argc, char **argv) {
 	wa.background_pixel = BlackPixel(dpy, scr);
 
 	// Create a full screen window
-	Window root = RootWindow(dpy, scr);
+	root = RootWindow(dpy, scr);
 	win = XCreateWindow(dpy,
 	  root,
 	  0,
@@ -361,9 +363,12 @@ void HandleSignal(int sig)
 	die(APPNAME": Caught signal; dying\n");
 }
 
+// i think this should be in an event loop instead of this threaded
+// thing
 void* RaiseWindow(void *data) {
 	while(1) {
 		XRaiseWindow(dpy, win);
+		XGrabKeyboard(dpy, root, True, GrabModeAsync, GrabModeAsync, CurrentTime);
 		sleep(1);
 	}
 
