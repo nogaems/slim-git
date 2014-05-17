@@ -150,7 +150,6 @@ int main(int argc, char **argv) {
 
 	XSetWindowAttributes wa;
 	wa.override_redirect = 1;
-	wa.background_pixel = BlackPixel(dpy, scr);
 
 	// Create a full screen window
 	root = RootWindow(dpy, scr);
@@ -164,7 +163,7 @@ int main(int argc, char **argv) {
 	  DefaultDepth(dpy, scr),
 	  CopyFromParent,
 	  DefaultVisual(dpy, scr),
-	  CWOverrideRedirect | CWBackPixel,
+	  CWOverrideRedirect,
 	  &wa);
 	XMapWindow(dpy, win);
 
