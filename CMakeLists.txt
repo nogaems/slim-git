@@ -45,26 +45,49 @@ set(SLIM_DEFINITIONS ${SLIM_DEFINITIONS} "-DSYSCONFDIR=\"${SYSCONFDIR}\"")
 set(slim_srcs
 	main.cpp
 	app.cpp
-	cfg.cpp
-	image.cpp
 	numlock.cpp
-	panel.cpp
 	switchuser.cpp
-	util.cpp
-	log.cpp
 	png.c
 	jpeg.c
-    coord.cpp
 )
 
+set(slimlock_srcs
+	slimlock.cpp
+)
+
+set(common_srcs
+	cfg.cpp
+	image.cpp
+	log.cpp
+	panel.cpp
+	util.cpp
+	coord.cpp
+)
 if(USE_PAM)
-	set(slim_srcs ${slim_srcs} PAM.cpp)
+	set(common_srcs ${common_srcs} PAM.cpp)
+	# for now, only build slimlock if we are using PAM.
+	set(BUILD_SLIMLOCK 1)
 endif(USE_PAM)
+
+# Build common library
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries")
+
+if (BUILD_SHARED_LIBS)
+	message(STATUS "Enable shared library building")
+	add_library(libslim ${common_srcs})
+else(BUILD_SHARED_LIBS)
+	message(STATUS "Disable shared library building")
+	add_library(libslim STATIC ${common_srcs})
+endif(BUILD_SHARED_LIBS)
+
 if(USE_CONSOLEKIT)
 	set(slim_srcs ${slim_srcs} Ck.cpp)
 endif(USE_CONSOLEKIT)
 
 add_executable(${PROJECT_NAME} ${slim_srcs})
+if(BUILD_SLIMLOCK)
+	add_executable(slimlock ${slimlock_srcs})
+endif(BUILD_SLIMLOCK)
 
 #Set the custom CMake module directory where our include/lib finders are
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
@@ -91,6 +114,8 @@ if(USE_PAM)
 		message("\tPAM Found")
 		set(SLIM_DEFINITIONS ${SLIM_DEFINITIONS} "-DUSE_PAM")
 		target_link_libraries(${PROJECT_NAME} ${PAM_LIBRARY})
+		target_link_libraries(libslim ${PAM_LIBRARY})
+		target_link_libraries(slimlock ${PAM_LIBRARY})
 		include_directories(${PAM_INCLUDE_DIR})
 	else(PAM_FOUND)
 		message("\tPAM Not Found")
@@ -130,6 +155,7 @@ endif(USE_CONSOLEKIT)
 find_library(M_LIB m)
 find_library(RT_LIB rt)
 find_library(CRYPTO_LIB crypt)
+find_package(Threads)
 
 add_definitions(${SLIM_DEFINITIONS})
 
@@ -138,6 +164,7 @@ include_directories(
 	${X11_INCLUDE_DIR}
 	${X11_Xft_INCLUDE_PATH}
 	${X11_Xrender_INCLUDE_PATH}
+	${X11_Xrandr_INCLUDE_PATH}
 	${FREETYPE_INCLUDE_DIRS}
 	${X11_Xmu_INCLUDE_PATH}
 	${ZLIB_INCLUDE_DIR}
@@ -145,7 +172,15 @@ include_directories(
 	${PNG_INCLUDE_DIR}
 )
 
-#Set up library with all found packages
+target_link_libraries(libslim
+	${RT_LIB}
+	${X11_Xft_LIB}
+	${X11_Xrandr_LIB}
+	${JPEG_LIBRARIES}
+	${PNG_LIBRARIES}
+)
+
+#Set up library with all found packages for slim
 target_link_libraries(${PROJECT_NAME}
 	${M_LIB}
 	${RT_LIB}
@@ -153,18 +188,60 @@ target_link_libraries(${PROJECT_NAME}
 	${X11_X11_LIB}
 	${X11_Xft_LIB}
 	${X11_Xrender_LIB}
+	${X11_Xrandr_LIB}
 	${X11_Xmu_LIB}
 	${FREETYPE_LIBRARY}
 	${JPEG_LIBRARIES}
 	${PNG_LIBRARIES}
-	)
+	libslim
+)
+
+if(BUILD_SLIMLOCK)
+    #Set up library with all found packages for slimlock
+    target_link_libraries(slimlock
+        ${M_LIB}
+        ${RT_LIB}
+        ${CRYPTO_LIB}
+        ${X11_X11_LIB}
+        ${X11_Xft_LIB}
+        ${X11_Xrender_LIB}
+        ${X11_Xrandr_LIB}
+        ${X11_Xmu_LIB}
+        ${X11_Xext_LIB}
+        ${FREETYPE_LIBRARY}
+        ${JPEG_LIBRARIES}
+        ${PNG_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
+        libslim
+    )
+endif(BUILD_SLIMLOCK)
 
 ####### install
 # slim
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin )
+install(TARGETS slimlock RUNTIME DESTINATION bin)
+
+if (BUILD_SHARED_LIBS)
+	set_target_properties(libslim PROPERTIES
+		OUTPUT_NAME slim
+		SOVERSION ${SLIM_VERSION})
+
+	install(TARGETS libslim
+		LIBRARY DESTINATION lib${LIB_SUFFIX}
+		ARCHIVE DESTINATION lib${LIB_SUFFIX}
+	)
+endif (BUILD_SHARED_LIBS)
+
 # man file
 install(FILES slim.1 DESTINATION ${MANDIR}/man1/)
 # configure
 install(FILES slim.conf DESTINATION ${SYSCONFDIR})
+
+#slimlock
+if(BUILD_SLIMLOCK)
+install(TARGETS slimlock RUNTIME DESTINATION bin PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE SETUID)
+install(FILES slimlock.1 DESTINATION ${MANDIR}/man1/)
+endif(BUILD_SLIMLOCK)
+
 # themes directory
 subdirs(themes)

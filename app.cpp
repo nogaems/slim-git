@@ -300,6 +300,9 @@ void App::Run() {
     Scr = DefaultScreen(Dpy);
     Root = RootWindow(Dpy, Scr);
 
+    // Intern _XROOTPMAP_ID property
+    BackgroundPixmapId = XInternAtom(Dpy, "_XROOTPMAP_ID", False);
+
     // for tests we use a standard window
     if (testing) {
         Window RealRoot = RootWindow(Dpy, Scr);
@@ -313,7 +316,7 @@ void App::Run() {
     HideCursor();
 
     // Create panel
-    LoginPanel = new Panel(Dpy, Scr, Root, cfg, themedir);
+    LoginPanel = new Panel(Dpy, Scr, Root, cfg, themedir, Panel::Mode_DM);
     bool firstloop = true; // 1st time panel is shown (for automatic username)
     bool focuspass = cfg->getOption("focus_password")=="yes";
     bool autologin = cfg->getOption("auto_login")=="yes";
@@ -1092,6 +1095,8 @@ void App::setBackground(const string& themedir) {
         }
         Pixmap p = image->createPixmap(Dpy, Scr, Root);
         XSetWindowBackgroundPixmap(Dpy, Root, p);
+        XChangeProperty(Dpy, Root, BackgroundPixmapId, XA_PIXMAP, 32,
+            PropModeReplace, (unsigned char *)&p, 1);
     }
     XClearWindow(Dpy, Root);
 
