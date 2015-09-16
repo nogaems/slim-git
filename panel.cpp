@@ -16,7 +16,7 @@
 using namespace std;
 
 Panel::Panel(Display* dpy, int scr, Window root, Cfg* config, const string& themedir)
-    : Dpy(dpy), Scr(scr), Root(root), cfg(config), session(""),
+    : Dpy(dpy), Scr(scr), Root(root), cfg(config), session_name(""), session_exec(""),
       // Load properties from config / theme
       input_name(cfg->getIntOption("input_name_x"), cfg->getIntOption("input_name_y")),
       input_pass(cfg->getIntOption("input_pass_x"), cfg->getIntOption("input_pass_y")),
@@ -175,7 +175,8 @@ void Panel::ClosePanel() {
 }
 
 void Panel::ClearPanel() {
-    session = "";
+    session_name = "";
+    session_exec = "";
     Reset();
     XClearWindow(Dpy, Root);
     XClearWindow(Dpy, Win);
@@ -547,13 +548,15 @@ void Panel::ShowText(){
 }
 
 string Panel::getSession() {
-    return session;
+    return session_exec;
 }
 
 // choose next available session type
 void Panel::SwitchSession() {
-    session = cfg->nextSession(session);
-    if (session.size() > 0) {
+    pair<string,string> ses = cfg->nextSession();
+    session_name = ses.first;
+    session_exec = ses.second;
+    if (session_name.size() > 0) {
         ShowSession();
     }
 }
@@ -562,7 +565,7 @@ void Panel::SwitchSession() {
 void Panel::ShowSession() {
 	string msg_x, msg_y;
     XClearWindow(Dpy, Root);
-    string currsession = cfg->getOption("session_msg") + " " + session;
+    string currsession = cfg->getOption("session_msg") + " " + session_name;
     XGlyphInfo extents;
 	
 	sessionfont = XftFontOpenName(Dpy, Scr, cfg->getOption("session_font").c_str());

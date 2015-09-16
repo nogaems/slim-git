@@ -139,7 +139,8 @@ private:
     std::string themedir;
 
     // Session handling
-    std::string session;
+    std::string session_name;
+    std::string session_exec;
 
 };
 
