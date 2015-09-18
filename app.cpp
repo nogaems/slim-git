@@ -136,7 +136,7 @@ App::App(int argc, char** argv)
     serverStarted(false), mcookie(string(App::mcookiesize, 'a')),
     daemonmode(false), force_nodaemon(false),
 #ifdef USE_CONSOLEKIT
-    consolekit_support_enabled = true;
+    consolekit_support_enabled(true),
 #endif
     firstlogin(true), Dpy(NULL)
 {
