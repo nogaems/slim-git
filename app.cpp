@@ -135,13 +135,16 @@ App::App(int argc, char** argv)
     ServerPID(-1), testing(false),
     serverStarted(false), mcookie(string(App::mcookiesize, 'a')),
     daemonmode(false), force_nodaemon(false),
+#ifdef USE_CONSOLEKIT
+    consolekit_support_enabled = true;
+#endif
     firstlogin(true), Dpy(NULL)
 {
     int tmp;
 
     // Parse command line
     // Note: we force a option for nodaemon switch to handle "-nodaemon"
-    while((tmp = getopt(argc, argv, "vhp:n:d?")) != EOF) {
+    while((tmp = getopt(argc, argv, "vhsp:n:d?")) != EOF) {
         switch (tmp) {
         case 'p':    // Test theme
             testtheme = optarg;
@@ -162,6 +165,11 @@ App::App(int argc, char** argv)
             std::cout << APPNAME << " version " << VERSION << endl;
             exit(OK_EXIT);
             break;
+#ifdef USE_CONSOLEKIT
+        case 's':    // Disable consolekit support
+            consolekit_support_enabled = false;
+            break;
+#endif
         case '?':    // Illegal
             logStream << endl;
         case 'h':    // Help
@@ -170,6 +178,9 @@ App::App(int argc, char** argv)
             << "    -d: daemon mode" << endl
             << "    -nodaemon: no-daemon mode" << endl
             << "    -v: show version" << endl
+#ifdef USE_CONSOLEKIT
+            << "    -s: start for systemd, disable consolekit support" << endl
+#endif
             << "    -p /path/to/theme/dir: preview theme" << endl;
             exit(OK_EXIT);
             break;
@@ -565,13 +576,15 @@ void App::Login() {
 #endif
 
 #ifdef USE_CONSOLEKIT
-    // Setup the ConsoleKit session
-    try {
-        ck.open_session(DisplayName, pw->pw_uid);
-    }
-    catch(Ck::Exception &e) {
-        logStream << APPNAME << ": " << e << endl;
-        exit(ERR_EXIT);
+    if (consolekit_support_enabled) {
+        // Setup the ConsoleKit session
+        try {
+            ck.open_session(DisplayName, pw->pw_uid);
+        }
+        catch(Ck::Exception &e) {
+            logStream << APPNAME << ": " << e << endl;
+            exit(ERR_EXIT);
+        }
     }
 #endif
 
@@ -584,18 +597,20 @@ void App::Login() {
         char** child_env = pam.getenvlist();
 
 # ifdef USE_CONSOLEKIT
-        char** old_env = child_env;
+        if (consolekit_support_enabled) {
+            char** old_env = child_env;
 
-        // Grow the copy of the environment for the session cookie
-        int n;
-        for(n = 0; child_env[n] != NULL ; n++);
+            // Grow the copy of the environment for the session cookie
+            int n;
+            for(n = 0; child_env[n] != NULL ; n++);
 
-        n++;
+            n++;
 
-        child_env = static_cast<char**>(malloc(sizeof(char*)*(n+1)));
-        memcpy(child_env, old_env, sizeof(char*)*n);
-        child_env[n - 1] = StrConcat("XDG_SESSION_COOKIE=", ck.get_xdg_session_cookie());
-        child_env[n] = NULL;
+            child_env = static_cast<char**>(malloc(sizeof(char*)*(n+1)));
+            memcpy(child_env, old_env, sizeof(char*)*n);
+            child_env[n - 1] = StrConcat("XDG_SESSION_COOKIE=", ck.get_xdg_session_cookie());
+            child_env[n] = NULL;
+        }
 # endif /* USE_CONSOLEKIT */
 #else
 
@@ -617,7 +632,9 @@ void App::Login() {
         child_env[n++]=StrConcat("MAIL=", maildir.c_str());
         child_env[n++]=StrConcat("XAUTHORITY=", xauthority.c_str());
 # ifdef USE_CONSOLEKIT
-        child_env[n++]=StrConcat("XDG_SESSION_COOKIE=", ck.get_xdg_session_cookie());
+        if (consolekit_support_enabled) {
+            child_env[n++]=StrConcat("XDG_SESSION_COOKIE=", ck.get_xdg_session_cookie());
+        }
 # endif /* USE_CONSOLEKIT */
         child_env[n++]=0;
 
@@ -662,12 +679,14 @@ void App::Login() {
     }
 
 #ifdef USE_CONSOLEKIT
-    try {
-        ck.close_session();
+    if (consolekit_support_enabled) {
+        try {
+            ck.close_session();
+        }
+        catch(Ck::Exception &e) {
+            logStream << APPNAME << ": " << e << endl;
+        };
     }
-    catch(Ck::Exception &e) {
-        logStream << APPNAME << ": " << e << endl;
-    };
 #endif
 
 #ifdef USE_PAM
