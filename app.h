@@ -32,6 +32,8 @@
 #include "Ck.h"
 #endif
 
+#define MCOOKIESIZE 32
+
 class App {
 public:
     App(int argc, char** argv);
@@ -110,11 +112,9 @@ private:
 	// For testing themes
 	char* testtheme;
     bool testing;
-    
+
     std::string themeName;
     std::string mcookie;
-
-    const int mcookiesize;
 };
 
 
