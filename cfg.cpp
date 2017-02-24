@@ -148,12 +148,26 @@ Cfg::~Cfg() {
  */
 bool Cfg::readConf(string configfile) {
     int n = -1;
-    string line, fn(configfile);
+    size_t pos = 0;
+    string line, next, op, fn(configfile);
     map<string,string>::iterator it;
-    string op;
     ifstream cfgfile( fn.c_str() );
     if (cfgfile) {
         while (getline( cfgfile, line )) {
+            // Allow multi-line options when line terminated with '\'
+            if ((pos = line.find('\\')) != string::npos) {
+                if (line.length() == pos + 1) {
+                    line.replace(pos,1," ");
+                    next = next + line;
+                    continue;
+                } else
+                    line.replace(pos, line.length() - pos, " ");
+            }
+            if (!next.empty()) {
+                line = next + line;
+                next = "";
+            }
+
             it = options.begin();
             while (it != options.end()) {
                 op = it->first;
