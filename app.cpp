@@ -61,6 +61,8 @@ int conv(int num_msg, const struct pam_message **msg,
                     case Panel::Login:
                         (*resp)[i].resp=strdup(panel->GetName().c_str());
                         break;
+                    default:
+                        break;
                 }
                 break;
 
@@ -1013,7 +1015,7 @@ int App::StartServer() {
         break;
     }
 
-    delete args;
+    delete [] args;
 
     serverStarted = true;
 
