@@ -441,7 +441,8 @@ void Panel::EventHandler(const Panel::FieldType& curfield) {
     x11_pfd.events = POLLIN;
     uint64_t last_time = CurrentEpochms();
     while(loop) {
-        UpdateTextWidget(&last_time);
+        if (mode == Mode_Lock)
+            UpdateTextWidget(&last_time);
         if(XPending(Dpy) || poll(&x11_pfd, 1, -1) > 0) {
             while(XPending(Dpy)) {
                 XNextEvent(Dpy, &event);
