@@ -443,7 +443,7 @@ void Panel::EventHandler(const Panel::FieldType& curfield) {
     while(loop) {
         if (mode == Mode_Lock)
             UpdateTextWidget(&last_time);
-        if(XPending(Dpy) || poll(&x11_pfd, 1, -1) > 0) {
+        if(XPending(Dpy) || poll(&x11_pfd, 1, 100) > 0) {
             while(XPending(Dpy)) {
                 XNextEvent(Dpy, &event);
                 switch(event.type) {
