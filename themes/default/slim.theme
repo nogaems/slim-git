@@ -35,3 +35,14 @@ username_shadow_yoffset 1
 
 username_msg            Username:
 password_msg            Password:
+
+# Text widget with the output of a custom command
+text_widget_font           Verdana:size=16:bold:dpi=75
+text_widget_color          #ffffff
+text_widget_x              50%
+text_widget_y              33%
+text_widget_command        echo -ne `date`
+text_widget_interval       1.0
+text_widget_shadow_color   #000000
+text_widget_shadow_xoffset 1
+text_widget_shadow_yoffset 1

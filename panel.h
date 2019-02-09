@@ -103,6 +103,11 @@ private:
     Rectangle GetPrimaryViewport();
     void ApplyBackground(Rectangle = Rectangle());
 
+    void CalcPos(std::string cfgX, std::string cfgY, XGlyphInfo extents, Rectangle *rect);
+    void UpdateTextWidget(uint64_t *last_time);
+    std::string Execute(const char *cmd);
+    uint64_t CurrentEpochms();
+
     // Private data
     PanelType mode; // work mode
     Cfg *cfg;
@@ -133,7 +138,10 @@ private:
     XftColor entershadowcolor;
     ActionType action;
     FieldType field;
-    
+    XftColor text_widget_color;
+    XftColor text_widget_shadow_color;
+    XftFont *text_widget_font;
+
     // Username/Password
     std::string NameBuffer;
     std::string PasswdBuffer;
@@ -155,6 +163,11 @@ private:
     Coord password;
     std::string welcome_message;
     std::string intro_message;
+    Coord text_widget;
+    Coord text_widget_shadow_offset;
+    const char *text_widget_command;
+    std::string text_widget_former_string;
+    float text_widget_interval;
 
     // Pixmap data
     Pixmap PanelPixmap;
@@ -172,5 +185,3 @@ private:
 };
 
 #endif
-
-

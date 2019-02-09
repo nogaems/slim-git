@@ -25,7 +25,7 @@ using namespace std;
 
 typedef pair<string,string> option;
 
-Cfg::Cfg() 
+Cfg::Cfg()
     : currentSession(-1)
 {
     // Configuration options
@@ -113,7 +113,7 @@ Cfg::Cfg()
     options.insert(option("msg_shadow_xoffset", "0"));
     options.insert(option("msg_shadow_yoffset", "0"));
     options.insert(option("msg_shadow_color","#FFFFFF"));
-    
+
     options.insert(option("session_color","#FFFFFF"));
     options.insert(option("session_font","Verdana:size=16:bold"));
     options.insert(option("session_x","50%"));
@@ -121,6 +121,17 @@ Cfg::Cfg()
     options.insert(option("session_shadow_xoffset", "0"));
     options.insert(option("session_shadow_yoffset", "0"));
     options.insert(option("session_shadow_color","#FFFFFF"));
+
+    options.insert(option("text_widget_font","Verdana:size=16"));
+    options.insert(option("text_widget_color","#FFFFFF"));
+    options.insert(option("text_widget_x","50%"));
+    options.insert(option("text_widget_y","33%"));
+    options.insert(option("text_widget_command","echo -ne `date`"));
+    options.insert(option("text_widget_interval", "1.0"));
+    options.insert(option("text_widget_shadow_xoffset", "1"));
+    options.insert(option("text_widget_shadow_yoffset", "1"));
+    options.insert(option("text_widget_shadow_color","#000000"));
+
 
     // slimlock-specific options
     options.insert(option("dpms_standby_timeout", "60"));

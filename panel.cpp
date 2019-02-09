@@ -9,6 +9,13 @@
    (at your option) any later version.
 */
 
+#include <cstdio>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <array>
+#include <chrono>
 #include <sstream>
 #include <poll.h>
 #include <X11/extensions/Xrandr.h>
@@ -21,7 +28,10 @@ Panel::Panel(Display* dpy, int scr, Window root, Cfg* config, const string& them
       // Load properties from config / theme
       input_name(cfg->getIntOption("input_name_x"), cfg->getIntOption("input_name_y")),
       input_pass(cfg->getIntOption("input_pass_x"), cfg->getIntOption("input_pass_y")),
-      inputShadowOffset(cfg->getIntOption("input_shadow_xoffset"), cfg->getIntOption("input_shadow_yoffset"))
+      inputShadowOffset(cfg->getIntOption("input_shadow_xoffset"), cfg->getIntOption("input_shadow_yoffset")),
+      text_widget(cfg->getIntOption("text_widget_x"), cfg->getIntOption("text_widget_y")),
+      text_widget_shadow_offset(cfg->getIntOption("text_widget_shadow_xoffset"),
+                                cfg->getIntOption("text_widget_shadow_yoffset"))
 {
     if (mode == Mode_Lock) {
         Win = root;
@@ -52,6 +62,7 @@ Panel::Panel(Display* dpy, int scr, Window root, Cfg* config, const string& them
     introfont = XftFontOpenName(Dpy, Scr, cfg->getOption("intro_font").c_str());
     enterfont = XftFontOpenName(Dpy, Scr, cfg->getOption("username_font").c_str());
     msgfont = XftFontOpenName(Dpy, Scr, cfg->getOption("msg_font").c_str());
+    text_widget_font = XftFontOpenName(Dpy, Scr, cfg->getOption("text_widget_font").c_str());
 
     Visual* visual = DefaultVisual(Dpy, Scr);
     Colormap colormap = DefaultColormap(Dpy, Scr);
@@ -69,11 +80,18 @@ Panel::Panel(Display* dpy, int scr, Window root, Cfg* config, const string& them
                       cfg->getOption("session_color").c_str(), &sessioncolor);
     XftColorAllocName(Dpy, DefaultVisual(Dpy, Scr), colormap,
                       cfg->getOption("session_shadow_color").c_str(), &sessionshadowcolor);
+    XftColorAllocName(Dpy, visual, colormap, cfg->getOption("text_widget_color").c_str(), &text_widget_color);
+    XftColorAllocName(Dpy, visual, colormap, cfg->getOption("text_widget_shadow_color").c_str(),
+                      &text_widget_shadow_color);
 
     if (input_pass.x < 0 || input_pass.y < 0) { // single inputbox mode
         input_pass.x = input_name.x;
         input_pass.y = input_name.y;
     }
+
+    text_widget_former_string = "";
+    text_widget_command = cfg->getOption("text_widget_command").c_str();
+    text_widget_interval = std::atof(cfg->getOption("text_widget_interval").c_str());
 
     // Load panel and background image
     string panelpng = "";
@@ -198,12 +216,15 @@ Panel::~Panel() {
     XftColorFree (Dpy, DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr), &introcolor);
     XftColorFree (Dpy, DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr), &sessioncolor);
     XftColorFree (Dpy, DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr), &sessionshadowcolor);
+    XftColorFree (Dpy, DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr), &text_widget_color);
+    XftColorFree (Dpy, DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr), &text_widget_shadow_color);
     XFreeGC(Dpy, TextGC);
     XftFontClose(Dpy, font);
     XftFontClose(Dpy, msgfont);
     XftFontClose(Dpy, introfont);
     XftFontClose(Dpy, welcomefont);
     XftFontClose(Dpy, enterfont);
+    XftFontClose(Dpy, text_widget_font);
 
     if (mode == Mode_Lock) {
         XFreeGC(Dpy, WinGC);
@@ -418,7 +439,9 @@ void Panel::EventHandler(const Panel::FieldType& curfield) {
     struct pollfd x11_pfd = {0};
     x11_pfd.fd = ConnectionNumber(Dpy);
     x11_pfd.events = POLLIN;
+    uint64_t last_time = CurrentEpochms();
     while(loop) {
+        UpdateTextWidget(&last_time);
         if(XPending(Dpy) || poll(&x11_pfd, 1, -1) > 0) {
             while(XPending(Dpy)) {
                 XNextEvent(Dpy, &event);
@@ -489,7 +512,7 @@ bool Panel::OnKeyPress(XEvent& event) {
     int yy = 0;
     string text;
     string formerString = "";
-    
+
     XLookupString(&event.xkey, &ascii, 1, &keysym, &compstatus);
     switch(keysym){
         case XK_F1:
@@ -753,9 +776,9 @@ void Panel::ShowSession() {
     XClearWindow(Dpy, Root);
     string currsession = cfg->getOption("session_msg") + " " + session_name;
     XGlyphInfo extents;
-	
+
 	sessionfont = XftFontOpenName(Dpy, Scr, cfg->getOption("session_font").c_str());
-    
+
 	XftDraw *draw = XftDrawCreate(Dpy, Root,
                                   DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr));
     XftTextExtents8(Dpy, sessionfont, reinterpret_cast<const XftChar8*>(currsession.c_str()),
@@ -768,7 +791,7 @@ void Panel::ShowSession() {
     int shadowYOffset = cfg->getIntOption("session_shadow_yoffset");
 
     SlimDrawString8(draw, &sessioncolor, sessionfont, x, y,
-                    currsession, 
+                    currsession,
                     &sessionshadowcolor,
                     shadowXOffset, shadowYOffset);
     XFlush(Dpy);
@@ -863,7 +886,7 @@ Rectangle Panel::GetPrimaryViewport() {
             return fallback;
         }
 
-    // Fixes bug with multiple monitors.  Just pick first monitor if 
+    // Fixes bug with multiple monitors.  Just pick first monitor if
     // XRRGetOutputInfo gives returns bad into for crtc.
     if (primary_info->crtc < 1) {
         if (primary_info->ncrtc > 0) {
@@ -914,3 +937,73 @@ void Panel::ApplyBackground(Rectangle rect) {
         cerr << APPNAME << ": failed to put pixmap on the screen\n.";
     }
 };
+
+std::string Panel::Execute(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+}
+
+void Panel::CalcPos(std::string cfgX, std::string cfgY, XGlyphInfo extents, Rectangle *rect)
+{
+    if (mode == Mode_Lock) {
+        rect->x = Cfg::absolutepos(cfgX, viewport.width, extents.width);
+        rect->y = Cfg::absolutepos(cfgY, viewport.height, extents.height);
+    } else {
+        rect->x = Cfg::absolutepos(cfgX, XWidthOfScreen(ScreenOfDisplay(Dpy, Scr)), extents.width);
+        rect->y = Cfg::absolutepos(cfgY, XHeightOfScreen(ScreenOfDisplay(Dpy, Scr)), extents.height);
+    }
+}
+
+uint64_t Panel::CurrentEpochms()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+void Panel::UpdateTextWidget(uint64_t *last_time)
+{
+    uint64_t current_time = CurrentEpochms();
+    if ((current_time - (*last_time)) >= (text_widget_interval * 1000.0))
+    {
+        string cfgX, cfgY;
+        XGlyphInfo extents;
+        Rectangle rect;
+
+        Window target = (mode == Mode_Lock) ? Win : Root;
+        XftDraw *draw = XftDrawCreate(Dpy, target,
+                                      DefaultVisual(Dpy, Scr), DefaultColormap(Dpy, Scr));
+        cfgX = cfg->getOption("text_widget_x");
+        cfgY = cfg->getOption("text_widget_y");
+        XftTextExtentsUtf8(Dpy, text_widget_font,
+                           reinterpret_cast<const XftChar8*>(text_widget_former_string.c_str()),
+                           text_widget_former_string.length(), &extents);
+        CalcPos(cfgX, cfgY, extents, &rect);
+        rect.y = rect.y - extents.height;
+        rect.width = extents.width + text_widget_shadow_offset.x;
+        rect.height = extents.height + text_widget_shadow_offset.y;
+
+        int ret = XCopyArea(Dpy, PanelPixmap, target, WinGC,
+                            rect.x, rect.y, rect.width, rect.height,
+                            rect.x, rect.y);
+
+        std::string cmd_result = Execute(text_widget_command);
+
+        XftTextExtentsUtf8(Dpy, text_widget_font, reinterpret_cast<const XftChar8*>(cmd_result.c_str()),
+                           cmd_result.length(), &extents);
+        CalcPos(cfgX, cfgY, extents, &rect);
+        SlimDrawString8(draw, &text_widget_color, text_widget_font, rect.x, rect.y,
+                        cmd_result, &text_widget_shadow_color,
+                        text_widget_shadow_offset.x, text_widget_shadow_offset.y);
+        XFlush(Dpy);
+        XftDrawDestroy(draw);
+        *last_time = current_time;
+        text_widget_former_string = cmd_result;
+    }
+}
